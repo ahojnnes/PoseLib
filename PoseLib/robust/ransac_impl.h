@@ -31,9 +31,33 @@
 
 #include "PoseLib/types.h"
 
+#include <iostream>
 #include <vector>
 
 namespace poselib {
+
+// Overflows...
+// inline uint64_t nchoosek(uint64_t n, uint64_t k) {
+//     if (k > n) {
+//         throw std::runtime_error("nchoosek: k > n");
+//     }
+
+//     if (k == 0) {
+//         return 1;
+//     }
+
+//     return (n * nchoosek(n - 1, k - 1)) / k;
+// }
+
+// See: https://stackoverflow.com/a/12983878/4285191
+inline double nchoosek(uint64_t n, uint64_t k) {
+    double sum = 0;
+    for (uint64_t i = 0; i < k; i++) {
+        sum += std::log10(static_cast<double>(n - i));
+        sum -= std::log10(static_cast<double>(i + 1));
+    }
+    return std::pow(10, sum);
+}
 
 // Templated LO-RANSAC implementation (inspired by RansacLib from Torsten Sattler)
 template <typename Solver, typename Model = CameraPose>
@@ -111,8 +135,16 @@ RansacStats ransac(Solver &estimator, const RansacOptions &opt, Model *best_mode
             // this is to avoid log(prob_outlier) = 0 below
             dynamic_max_iter = opt.max_iterations;
         } else {
-            const double prob_outlier = 1.0 - std::pow(stats.inlier_ratio, estimator.sample_sz);
-            dynamic_max_iter = std::ceil(log_prob_missing_model / std::log(prob_outlier) * opt.dyn_num_trials_mult);
+            const double prob_outlier =
+                1.0 - (opt.use_approx_stopping ? std::pow(stats.inlier_ratio, estimator.sample_sz)
+                                               : (nchoosek(stats.num_inliers, estimator.sample_sz) /
+                                                  nchoosek(estimator.num_data, estimator.sample_sz)));
+            const double log_prob_outlier = std::log(prob_outlier);
+            if (log_prob_outlier == 0) {
+                dynamic_max_iter = opt.max_iterations;
+            } else {
+                dynamic_max_iter = std::ceil(log_prob_missing_model / log_prob_outlier);
+            }
         }
     }
 
