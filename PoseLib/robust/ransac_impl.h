@@ -50,13 +50,17 @@ namespace poselib {
 // }
 
 // See: https://stackoverflow.com/a/12983878/4285191
-inline double nchoosek(uint64_t n, uint64_t k) {
-    double sum = 0;
-    for (uint64_t i = 0; i < k; i++) {
-        sum += std::log10(static_cast<double>(n - i));
-        sum -= std::log10(static_cast<double>(i + 1));
+inline uint64_t nchoosek(uint64_t n, uint64_t k) {
+    if (n == 0 || n < k) {
+        return 0;
     }
-    return std::pow(10, sum);
+
+    uint64_t r = 1;
+    for (uint64_t d = 1; d <= k; ++d) {
+        r *= n--;
+        r /= d;
+    }
+    return r;
 }
 
 // Templated LO-RANSAC implementation (inspired by RansacLib from Torsten Sattler)
@@ -136,9 +140,10 @@ RansacStats ransac(Solver &estimator, const RansacOptions &opt, Model *best_mode
             dynamic_max_iter = opt.max_iterations;
         } else {
             const double prob_outlier =
-                1.0 - (opt.use_approx_stopping ? std::pow(stats.inlier_ratio, estimator.sample_sz)
-                                               : (nchoosek(stats.num_inliers, estimator.sample_sz) /
-                                                  nchoosek(estimator.num_data, estimator.sample_sz)));
+                1.0 - (opt.use_approx_stopping
+                           ? std::pow(stats.inlier_ratio, estimator.sample_sz)
+                           : (static_cast<double>(nchoosek(stats.num_inliers, estimator.sample_sz)) /
+                              static_cast<double>(nchoosek(estimator.num_data, estimator.sample_sz))));
             const double log_prob_outlier = std::log(prob_outlier);
             if (log_prob_outlier == 0) {
                 dynamic_max_iter = opt.max_iterations;
