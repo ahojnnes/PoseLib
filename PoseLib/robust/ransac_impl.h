@@ -36,31 +36,16 @@
 
 namespace poselib {
 
-// Overflows...
-// inline uint64_t nchoosek(uint64_t n, uint64_t k) {
-//     if (k > n) {
-//         throw std::runtime_error("nchoosek: k > n");
-//     }
-
-//     if (k == 0) {
-//         return 1;
-//     }
-
-//     return (n * nchoosek(n - 1, k - 1)) / k;
-// }
-
-// See: https://stackoverflow.com/a/12983878/4285191
-inline uint64_t nchoosek(uint64_t n, uint64_t k) {
-    if (n == 0 || n < k) {
+inline double compute_inlier_prob_exact(int num_data, int num_inliers, int sample_sz) {
+    if (sample_sz > num_inliers) {
         return 0;
     }
 
-    uint64_t r = 1;
-    for (uint64_t d = 1; d <= k; ++d) {
-        r *= n--;
-        r /= d;
+    double prob = 1.0;
+    for (int i = 0; i < sample_sz; ++i) {
+        prob *= static_cast<double>(num_inliers - i) / static_cast<double>(num_data - i);
     }
-    return r;
+    return prob;
 }
 
 // Templated LO-RANSAC implementation (inspired by RansacLib from Torsten Sattler)
@@ -142,8 +127,7 @@ RansacStats ransac(Solver &estimator, const RansacOptions &opt, Model *best_mode
             const double prob_outlier =
                 1.0 - (opt.use_approx_stopping
                            ? std::pow(stats.inlier_ratio, estimator.sample_sz)
-                           : (static_cast<double>(nchoosek(stats.num_inliers, estimator.sample_sz)) /
-                              static_cast<double>(nchoosek(estimator.num_data, estimator.sample_sz))));
+                           : compute_inlier_prob_exact(estimator.num_data, stats.num_inliers, estimator.sample_sz));
             const double log_prob_outlier = std::log(prob_outlier);
             if (log_prob_outlier == 0) {
                 dynamic_max_iter = opt.max_iterations;
